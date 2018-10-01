@@ -3,6 +3,7 @@ import imghdr
 import os
 import random
 from keras import backend as K
+import cv2
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -46,6 +47,14 @@ def preprocess_image(img_path, model_image_size):
     image_data /= 255.
     image_data = np.expand_dims(image_data, 0)  # Add batch dimension.
     return image, image_data
+
+def preprocess_image_cv2(image, model_image_size):
+    resized_image = cv2.resize(image,model_image_size )
+    image_data = np.array(resized_image, dtype='float32')
+    image_data /= 255.
+    image_data = np.expand_dims(image_data, 0)  # Add batch dimension.
+    return image, image_data
+
 
 def draw_boxes(image, out_scores, out_boxes, out_classes, class_names, colors):
     
