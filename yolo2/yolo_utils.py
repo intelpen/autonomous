@@ -49,7 +49,7 @@ def preprocess_image(img_path, model_image_size):
     return image, image_data
 
 def preprocess_image_cv2(image, model_image_size):
-    resized_image = cv2.resize(image,model_image_size )
+    resized_image = cv2.resize(image,model_image_size,interpolation=cv2.INTER_NEAREST)
     image_data = np.array(resized_image, dtype='float32')
     image_data /= 255.
     image_data = np.expand_dims(image_data, 0)  # Add batch dimension.
@@ -89,3 +89,35 @@ def draw_boxes(image, out_scores, out_boxes, out_classes, class_names, colors):
         draw.rectangle([tuple(text_origin), tuple(text_origin + label_size)], fill=colors[c])
         draw.text(text_origin, label, fill=(0, 0, 0), font=font)
         del draw
+
+
+def draw_boxes_cv2(image, out_scores, out_boxes, out_classes, class_names, colors):
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    thickness = (image.shape[0] + image.shape[1]) // 300
+
+    for i, c in reversed(list(enumerate(out_classes))):
+        predicted_class = class_names[c]
+        box = out_boxes[i]
+        score = out_scores[i]
+
+        label = '{} {:.2f}'.format(predicted_class, score)
+        label_size = (20, 10*len(label))
+
+        top, left, bottom, right = box
+        top = max(0, np.floor(top + 0.5).astype('int32'))
+        left = max(0, np.floor(left + 0.5).astype('int32'))
+        bottom = min(image.shape[0], np.floor(bottom + 0.5).astype('int32'))
+        right = min(image.shape[1], np.floor(right + 0.5).astype('int32'))
+        #print(label, (left, top), (right, bottom))
+
+        if top - label_size[1] >= 0:
+            text_origin = np.array([left, top - label_size[1]])
+        else:
+            text_origin = np.array([left, top + 1])
+
+        # My kingdom for a good redistributable image drawing library.
+
+        cv2.rectangle(image,(left + i, top + i), (right - i, bottom - i),color=colors[c],thickness=thickness )
+        cv2.rectangle(image,tuple(text_origin), tuple(text_origin + label_size), color=colors[c])
+        cv2.putText(image, label, tuple(text_origin), font, 2,  colors[c],2)
+        # cv2.putText(image, str(delta_time), (200, 200), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 2)

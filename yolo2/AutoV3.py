@@ -15,10 +15,10 @@ from keras import backend as K
 from keras.layers import Input, Lambda, Conv2D
 from keras.models import load_model, Model
 from yolo_utils import read_classes, read_anchors, generate_colors, preprocess_image, draw_boxes, scale_boxes, \
-    preprocess_image_cv2
+    preprocess_image_cv2, draw_boxes_cv2
 from yad2k.models.keras_yolo import yolo_head, yolo_boxes_to_corners, preprocess_true_boxes, yolo_loss, yolo_body
 import sys
-
+import time
 
 def yolo_filter_boxes(box_confidence, boxes, box_class_probs, threshold=.6):
     """Filters YOLO boxes by thresholding on object and class confidence.
@@ -222,7 +222,7 @@ def predict(sess, image_file):
 
     return out_scores, out_boxes, out_classes
 
-def predict_cv2(sess, image_file):
+def predict_cv2(sess, image_file, delta_time):
     """
     Runs the graph stored in "sess" to predict boxes for "image_file". Prints and plots the preditions.
 
@@ -255,8 +255,41 @@ def predict_cv2(sess, image_file):
     # Display the results in the notebook
     #output_image = scipy.misc.imread(os.path.join("out", image_file))
     output_image = cv2.imread(os.path.join("out", image_file))
+    delta_time = int(delta_time *1000)
+    cv2.putText(output_image,str(delta_time), (200,200),  cv2.FONT_HERSHEY_SIMPLEX, 2, (255,255,255),2)
     cv2.imshow("predictions", output_image)
 
+    return out_scores, out_boxes, out_classes
+
+
+def predict_cv2_fast(sess, image):
+    """
+    Runs the graph stored in "sess" to predict boxes for "image_file". Prints and plots the preditions.
+
+    Arguments:
+    sess -- your tensorflow/Keras session containing the YOLO graph
+    image_file -- name of an image stored in the "images" folder.
+
+    Returns:
+    out_scores -- tensor of shape (None, ), scores of the predicted boxes
+    out_boxes -- tensor of shape (None, 4), coordinates of the predicted boxes
+    out_classes -- tensor of shape (None, ), class index of the predicted boxes
+
+    Note: "None" actually represents the number of predicted boxes, it varies between 0 and max_boxes.
+    """
+    # Preprocess your image
+    image, image_data = preprocess_image_cv2(image, model_image_size=(608, 608))
+    # Run the session with the correct tensors and choose the correct placeholders in the feed_dict.
+    start_time = time.time()
+    out_scores, out_boxes, out_classes = sess.run(fetches=[scores, boxes, classes],
+                                                  feed_dict={yolo_model.input: image_data, K.learning_phase(): 0})
+    end_time = time.time()
+    delta_time = end_time - start_time
+    colors = generate_colors(class_names)
+    draw_boxes_cv2(image, out_scores, out_boxes, out_classes, class_names, colors)
+    delta_time = int(delta_time *1000)
+    cv2.putText(image,str(delta_time), (200,200),  cv2.FONT_HERSHEY_SIMPLEX, 2, (255,255,255),2)
+    cv2.imshow("predictions", image)
     return out_scores, out_boxes, out_classes
 
 
@@ -266,7 +299,7 @@ if __name__ == "__main__":
     sess = K.get_session()
     class_names = read_classes("model_data/coco_classes.txt")
     anchors = read_anchors("model_data/yolo_anchors.txt")
-    cap = cv2.VideoCapture("E://science//info//ML//data//road_video.mp4")
+    cap = cv2.VideoCapture("E://science//info//ML//data//road_video_compressed2.mp4")
     if (cap.isOpened()):
         ret, frame = cap.read()
     image_shape = (float(frame.shape[0]),float(frame.shape[1]))
@@ -287,23 +320,28 @@ if __name__ == "__main__":
     scores, boxes, classes = yolo_eval(yolo_outputs, image_shape)
     # Run the graph on an image
 
-    cap = cv2.VideoCapture("E://science//info//ML//data//road_video.mp4")
+
+    start_time = time.time()
+    end_time = start_time
+    delta_time = end_time - start_time
     while cap.isOpened():
+
         ret, frame = cap.read()
         if ret == True:
-            cv2.imshow("original", frame)
-            cv2.imwrite("images/current_img.jpg", frame)
+            #frame = cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
+            #cv2.imshow("original", frame)
+            #print(frame.shape)
+            #cv2.imwrite("images/current_img.jpg", frame)
             #image, image_data = preprocess_image("images/current_img.jpg", model_image_size=(608, 608))
-            out_scores, out_boxes, out_classes = predict_cv2(sess, "current_img.jpg")
-            if cv2.waitKey(25) & 0xFF == ord('q'):
+            #out_scores, out_boxes, out_classes = predict_cv2(sess, "current_img.jpg", delta_time)
+            out_scores, out_boxes, out_classes = predict_cv2_fast(sess, frame)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
+        delta_time = end_time-start_time
     cap.release()
     cv2.destroyAllWindows()
 
     print(scores)
-    plt.imshow(image)
     plt.show()
-    # Run the following cell on the "test.jpg" image to verify that your function is correct.
-    out_scores, out_boxes, out_classes = predict(sess, "test.jpg")
 
 
